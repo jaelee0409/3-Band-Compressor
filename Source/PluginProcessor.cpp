@@ -12,11 +12,6 @@
 //==============================================================================
 _3BandCompressorAudioProcessor::_3BandCompressorAudioProcessor()
     : apvts(*this, nullptr, "Parameters", createParameterLayout()),
-    attack(dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("Attack"))),
-    release(dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("Release"))),
-    threshold(dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("Threshold"))),
-    ratio(dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("Ratio"))),
-	bypass(dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("Bypass"))),
 #ifndef JucePlugin_PreferredChannelConfigurations
     AudioProcessor (BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
@@ -28,11 +23,17 @@ _3BandCompressorAudioProcessor::_3BandCompressorAudioProcessor()
                        )
 #endif
 {
-	jassert(attack != nullptr);
-	jassert(release != nullptr);
-	jassert(threshold != nullptr);
-	jassert(ratio != nullptr);
-	jassert(bypass != nullptr);
+    lowBandCompressor.setParameters(dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("Threshold")),
+                                    dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("Attack")),
+                                    dynamic_cast<juce::AudioParameterFloat*>(apvts.getParameter("Release")),
+                                    dynamic_cast<juce::AudioParameterChoice*>(apvts.getParameter("Ratio")),
+                                    dynamic_cast<juce::AudioParameterBool*>(apvts.getParameter("Bypass")));
+
+    jassert(apvts.getParameter("Threshold") != nullptr);
+    jassert(apvts.getParameter("Attack") != nullptr);
+    jassert(apvts.getParameter("Release") != nullptr);
+    jassert(apvts.getParameter("Ratio") != nullptr);
+    jassert(apvts.getParameter("Bypass") != nullptr);
 }
 
 _3BandCompressorAudioProcessor::~_3BandCompressorAudioProcessor() {
@@ -94,11 +95,11 @@ void _3BandCompressorAudioProcessor::changeProgramName (int index, const juce::S
 void _3BandCompressorAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock) {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
-	juce::dsp::ProcessSpec spec;
+    juce::dsp::ProcessSpec spec;
 	spec.sampleRate = sampleRate;
 	spec.maximumBlockSize = samplesPerBlock;
 	spec.numChannels = getTotalNumOutputChannels();
-	compressor.prepare(spec);
+	lowBandCompressor.prepare(spec);
 }
 
 void _3BandCompressorAudioProcessor::releaseResources() {
@@ -157,16 +158,12 @@ void _3BandCompressorAudioProcessor::processBlock (juce::AudioBuffer<float>& buf
     //    // ..do something to the data...
     //}
 
-	compressor.setAttack(attack->get());
-	compressor.setRelease(release->get());
-	compressor.setThreshold(threshold->get());
-	compressor.setRatio(ratio->getCurrentChoiceName().getFloatValue());
-	
-	juce::dsp::AudioBlock<float> audioBlock(buffer);
-	juce::dsp::ProcessContextReplacing<float> context(audioBlock);
-    context.isBypassed = bypass->get();
-
-	compressor.process(context);
+	lowBandCompressor.updateSettings();
+	//midBandCompressor.updateSettings();
+	//highBandCompressor.updateSettings();
+	lowBandCompressor.process(buffer);
+	//midBandCompressor.process(buffer);
+	//highBandCompressor.process(buffer);
 }
 
 //==============================================================================
@@ -215,8 +212,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout _3BandCompressorAudioProcess
                                                   attackAndReleaseRange,
                                                   250.0f));
 
-	std::vector<double> ratioChoices = std::vector<double>{ 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0,
-                                                                10.0, 15.0, 20.0, 50.0, 100.0 };
+	std::vector<float> ratioChoices = std::vector<float>{ 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f,
+                                                                10.0f, 15.0f, 20.0f, 50.0f, 100.0f };
     juce::StringArray ratioStringArray;
 	for (auto choice : ratioChoices) {
         ratioStringArray.add(juce::String(choice, 1));
